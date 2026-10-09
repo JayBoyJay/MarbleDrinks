@@ -1,16 +1,35 @@
 // Camera director with two styles:
-//  - 'all' (default): every marble is always on screen. The field is split into
+//  - 'players' (default): one split-screen pane per phone player, each following
+//    that player's marble, so everyone can always see their own marble. Up to 4
+//    players share the full screen; with more, a sidebar holds the standings and
+//    the panes tile the rest (a 4x4 grid for 16 players).
+//  - 'all': every marble is always on screen. The field is split into
 //    groups by the gaps between them, and each group gets its own split-screen
 //    pane (up to 4), so every player can see their marble to steer and decide.
 //  - 'broadcast': cuts between chase, pack, trackside and "battle for last
 //    place" shots, like a marble league broadcast.
 import * as THREE from 'three';
-import { worldPos, frameAt } from './track.js';
+import { worldPos, frameAt, START_S } from './track.js';
 
 const v = (o) => new THREE.Vector3(o.x, o.y, o.z);
 
 // split-screen layouts (x, y from the top-left, as fractions of the screen);
 // pane 0 always holds the leaders
+// pick the grid (columns x rows) whose cells are closest to a TV shape, without
+// wasting too many cells: 2 players side by side, 4 in a 2x2, 9 in 3x3, 16 in 4x4…
+function bestGrid(n, W, H) {
+  let best = null;
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    const cellAspect = (W / cols) / (H / rows);
+    const empty = cols * rows - n;
+    const score = Math.abs(Math.log(cellAspect / 1.45)) + empty * 0.22;
+    if (!best || score < best.score) best = { cols, rows, score };
+  }
+  return best;
+}
+const ordinal = (n) => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+
 const LAYOUTS = {
   1: [{ x: 0, y: 0, w: 1, h: 1 }],
   2: [{ x: 0, y: 0, w: 0.5, h: 1 }, { x: 0.5, y: 0, w: 0.5, h: 1 }],
@@ -35,6 +54,8 @@ export class Director {
     this.paneCams = [];
     this.paneCount = 1; this.wantCount = 1; this.wantT = 0;
     this.panes = null;
+    this.sidebar = 0;
+    this.playerCams = new Map();
   }
 
   P(s, u, h) { worldPos(this.world.track, s, u, h, this.tmp); return v(this.tmp); }
@@ -56,8 +77,10 @@ export class Director {
       this.caption = '';
     } else if (this.mode === 'grid') {
       const a = Math.sin(this.t * 0.5) * 2.5;
-      pos = this.P(-1.5, a, 3.4);
-      look = this.P(6, 0, 0.4);
+      // pull back further when the grid is long (lots of players)
+      const rows = Math.ceil((sim?.marbles.length || 8) / 4);
+      pos = this.P(START_S - 6 - rows * 1.1, a, 3 + rows * 0.25);
+      look = this.P(START_S - rows * 0.5, 0, 0.4);
       this.caption = '';
     } else if (this.mode === 'results') {
       const c = this.P(tr.finishS + 14, 0, 0);
@@ -65,13 +88,17 @@ export class Director {
       pos = c.clone().add(new THREE.Vector3(Math.cos(a) * 11, 6.5, Math.sin(a) * 11));
       look = c;
       this.caption = '';
-    } else if (this.style === 'all' && sim) {
+    } else if (this.style === 'players' && sim && sim.marbles.filter((m) => !m.bot).length >= 2) {
+      this.updatePlayerPanes(dt, sim);
+      return;
+    } else if ((this.style === 'all' || this.style === 'players') && sim) {
+      this.sidebar = 0;
       this.updatePanes(dt, sim);
       return;
     } else {
       ({ pos, look } = this.raceShot(dt, sim));
     }
-    this.world.panes = null; this.panes = null;
+    this.world.panes = null; this.panes = null; this.sidebar = 0;
 
     // never put the camera inside the hillside
     const ground = this.world.terrain?.heightAt(pos.x, pos.z);
@@ -212,6 +239,58 @@ export class Director {
     // keep the main camera roughly on the lead group (used for shadows and sound)
     this.cam.position.copy(this.panes[0].camera.position);
     this.cam.quaternion.copy(this.panes[0].camera.quaternion);
+  }
+
+  // ---------------- one pane per player ----------------
+  updatePlayerPanes(dt, sim) {
+    const W = window.innerWidth, H = window.innerHeight;
+    const humans = sim.marbles.filter((m) => !m.bot);
+    const n = humans.length;
+    // with more than 4 players, standings move to a sidebar so they don't cover anyone's pane
+    this.sidebar = n > 4 ? Math.round(Math.min(300, Math.max(220, W * 0.17))) : 0;
+    const AW = W - this.sidebar, AH = H;
+    const { cols, rows } = bestGrid(n, AW, AH);
+    const cw = AW / cols, ch = AH / rows;
+    const st = sim.standings();
+    const place = new Map(st.map((m, i) => [m.id, i + 1]));
+    const racingHumans = st.filter((m) => !m.bot && !m.finished);
+    const lastHuman = racingHumans.length > 1 ? racingHumans[racingHumans.length - 1] : null;
+    const k = 1 - Math.exp(-dt * 9);
+    const cut = this.paneCut;
+    const panes = [];
+    const cell = (i) => ({ x: ((i % cols) * cw) / W, y: (Math.floor(i / cols) * ch) / H, w: cw / W, h: ch / H });
+    const follow = (key, m, i, label, color) => {
+      let pc = this.playerCams.get(key);
+      if (!pc) { pc = { cam: new THREE.PerspectiveCamera(58, 1, 0.1, 900), pos: new THREE.Vector3(), look: new THREE.Vector3(), s: m.s }; this.playerCams.set(key, pc); }
+      // stay locked on: never let a fast marble get more than a few metres ahead of its camera
+      pc.s = cut ? m.s : pc.s + (m.s - pc.s) * Math.min(1, dt * 10);
+      if (Math.abs(m.s - pc.s) > 3) pc.s = m.s - Math.sign(m.s - pc.s) * 3;
+      // chase cam: a little higher when panes are small, so there's more track in view
+      const up = 2.8 + Math.min(1.6, (n - 1) * 0.12);
+      const pos = this.P(pc.s - 6.2, m.u * 0.35, up), look = this.P(pc.s + 3, m.u * 0.6, 0.4);
+      const ground = this.world.terrain?.heightAt(pos.x, pos.z);
+      if (ground != null && pos.y < ground + 1.8) pos.y = ground + 1.8;
+      if (cut) { pc.pos.copy(pos); pc.look.copy(look); } else { pc.pos.lerp(pos, k); pc.look.lerp(look, Math.min(1, k * 1.5)); }
+      const r = cell(i);
+      pc.cam.aspect = cw / ch; pc.cam.updateProjectionMatrix();
+      pc.cam.position.copy(pc.pos); pc.cam.lookAt(pc.look);
+      panes.push({ camera: pc.cam, rect: r, label, color, focus: pc.look, id: key, followId: m.id });
+    };
+    humans.forEach((m, i) => {
+      const p = place.get(m.id);
+      const tag = m.finished ? `🏁 ${ordinal(p)}` : ordinal(p);
+      follow(m.id, m, i, `${tag}  ${m.name}${m === lastHuman ? '  🍺' : ''}`, m.color || '#ffffff');
+    });
+    // spare cells in the grid watch the leader
+    const leader = st.find((m) => !m.finished) || st[0];
+    for (let i = n; i < cols * rows; i++) follow('spare' + i, leader, i, `🔥 Leader: ${leader.name}`, '#ffd23f');
+    this.paneCut = false;
+    this.paneCam = true;
+    this.panes = panes;
+    this.world.panes = panes;
+    this.caption = '';
+    this.cam.position.copy(panes[0].camera.position);
+    this.cam.quaternion.copy(panes[0].camera.quaternion);
   }
 
   // a camera behind and above a group of marbles, far enough back to fit them all

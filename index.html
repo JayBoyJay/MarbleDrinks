@@ -44,7 +44,7 @@
   .trackcard h2 { margin: 0; font-size: 26px; font-style: italic; text-transform: uppercase; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip { font-size: 12px; padding: 4px 9px; border-radius: 99px; background: rgba(255,255,255,0.1); font-weight: 600; }
-  .players { padding: 18px; }
+  .players { padding: 18px; max-height: 62vh; overflow: auto; }
   .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
   .pcard { position: relative; background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: flex; align-items: center; gap: 10px; }
   .pcard img { width: 40px; height: 40px; }
@@ -92,7 +92,21 @@
   .pausecard { padding: 30px 34px; display: flex; flex-direction: column; gap: 12px; width: min(420px, 90vw); text-align: center; }
   .pausecard .big { font-size: 20px; padding: 14px; }
   .pane { position: absolute; box-shadow: inset 0 0 0 2px rgba(10,6,24,0.9); }
-  .pane span { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); background: rgba(16,12,34,0.8); padding: 4px 12px; border-radius: 99px; font-weight: 800; font-size: 14px; white-space: nowrap; }
+  .pane span { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); background: rgba(16,12,34,0.8); padding: 4px 12px; border-radius: 99px; font-weight: 800; font-size: 14px; white-space: nowrap; border: 2px solid transparent; max-width: 92%; overflow: hidden; text-overflow: ellipsis; }
+  .pane span.small { font-size: 12px; padding: 2px 9px; top: 6px; }
+  /* compact standings for big races */
+  .standings.compact .row { font-size: 12px; padding: 1px 6px; gap: 6px; grid-template-columns: 20px 18px 1fr auto; }
+  .standings.compact .row img { width: 16px; height: 16px; }
+  .standings.compact .row .gap { font-size: 11px; }
+  /* more than 4 players: standings, timer and track name move to a sidebar on the right */
+  #hud.side { background: linear-gradient(to left, #120d26 var(--side), transparent var(--side)); }
+  #hud.side .tl { left: auto; right: 10px; top: 10px; width: calc(var(--side) - 20px); padding: 8px 12px; }
+  #hud.side .tl .tn { font-size: 16px; }
+  #hud.side .timer { left: auto; right: 106px; transform: none; top: 74px; width: calc(var(--side) - 116px); text-align: center; font-size: 24px; padding: 4px 10px; }
+  #hud.side .pausebtn { left: auto; right: 10px; top: 74px; width: 88px; padding: 9px 6px; }
+  #hud.side .standings { top: 124px; right: 10px; width: calc(var(--side) - 20px); max-height: calc(100% - 134px); overflow: hidden; }
+  #hud.side .progress, #hud.side .feed, #hud.side .caption { display: none; }
+  .subtitle.side { left: calc((100% - var(--side)) / 2); max-width: min(900px, calc(90vw - var(--side))); }
   .caption { position: absolute; bottom: 70px; left: 18px; padding: 6px 12px; font-weight: 900; font-style: italic; letter-spacing: 0.06em; background: var(--hot); border-radius: 8px; font-size: 14px; }
   .feed { position: absolute; bottom: 110px; left: 18px; display: flex; flex-direction: column; gap: 6px; width: 420px; }
   .feed div { background: var(--panel); padding: 7px 12px; border-radius: 10px; font-weight: 600; font-size: 15px; animation: pop 0.25s ease-out; border-left: 4px solid var(--hot); }
@@ -108,13 +122,17 @@
 
   /* ---------- results ---------- */
   #results { position: fixed; inset: 0; display: grid; grid-template-columns: 1fr 1.15fr; gap: 20px; padding: 24px; align-items: start; }
-  #results .panel { padding: 22px; }
+  #results .panel { padding: 22px; max-height: calc(100vh - 48px); overflow: auto; }
   .podium { display: flex; flex-direction: column; gap: 6px; }
   .rrow { display: grid; grid-template-columns: 40px 34px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 10px; font-weight: 700; }
   .rrow img { width: 32px; height: 32px; }
   .rrow .p { font-size: 20px; font-weight: 900; text-align: center; }
   .rrow .t { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
   .rrow .pts { color: var(--gold); font-size: 13px; }
+  .podium.compact { gap: 2px; }
+  .podium.compact .rrow { padding: 2px 10px; grid-template-columns: 34px 24px 1fr auto auto; font-size: 14px; }
+  .podium.compact .rrow img { width: 22px; height: 22px; }
+  .podium.compact .rrow .p { font-size: 15px; }
   .rrow.first { background: linear-gradient(90deg, rgba(255,210,63,0.3), transparent); }
   .rrow.bot { opacity: 0.6; }
   .cons { display: flex; flex-direction: column; gap: 12px; }
@@ -162,7 +180,7 @@
       <span>Power-ups</span>
       <span class="seg" id="pickSeg"><button data-v="on">On</button><button data-v="off">Off</button></span>
       <span>TV camera</span>
-      <span class="seg" id="camSeg"><button data-v="all">All marbles</button><button data-v="broadcast">Broadcast</button></span>
+      <span class="seg" id="camSeg"><button data-v="players" title="One view per phone player">Per player</button><button data-v="all" title="Every marble on screen, grouped">All marbles</button><button data-v="broadcast" title="TV-style camera cuts">Broadcast</button></span>
       <span>Tilt steering</span>
       <span class="seg" id="steerSeg"><button data-v="off">Off</button><button data-v="tilt">📱 Tilt</button></span>
       <span>Terrain</span>

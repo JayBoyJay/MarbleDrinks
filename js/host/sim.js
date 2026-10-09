@@ -3,7 +3,7 @@
 // Working in track space keeps marbles on the course (no flying off into the void)
 // while still giving bumps, bounces, pile-ups, jumps and overtakes.
 
-import { DS, MARBLE_R as R, sectionAt, surfSlope } from './track.js';
+import { DS, MARBLE_R as R, sectionAt, surfSlope, START_S, GRID_COLS } from './track.js';
 import { rollPower } from '../powers.js';
 
 const G = 9.81;
@@ -45,12 +45,12 @@ export class RaceSim {
     const n = entrants.length;
     const order = [...entrants].sort(() => rand() - 0.5);
     this.marbles = order.map((e, i) => {
-      const row = Math.floor(i / 4), col = i % 4;
-      const inRow = Math.min(4, n - row * 4);
+      const row = Math.floor(i / GRID_COLS), col = i % GRID_COLS;
+      const inRow = Math.min(GRID_COLS, n - row * GRID_COLS);
       const spread = 1.2;
       return {
-        id: e.id, name: e.name, skin: e.skin, bot: !!e.bot,
-        s: 5.4 - row * 1.05, u: (col - (inRow - 1) / 2) * spread + (rand() - 0.5) * 0.1, h: 0,
+        id: e.id, name: e.name, skin: e.skin, bot: !!e.bot, color: e.color,
+        s: START_S - 0.8 - row * 1.0, u: (col - (inRow - 1) / 2) * spread + (rand() - 0.5) * 0.1, h: 0,
         vs: 0, vu: 0, vh: 0,
         // tiny per-marble differences, like real marbles of slightly different weight
         drag: 0.97 + rand() * 0.06, roll: 0.9 + rand() * 0.2,

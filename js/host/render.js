@@ -1,7 +1,7 @@
 // three.js scene: track geometry, terrain, decorations, marbles and effects.
 import * as THREE from 'three';
 import { RoomEnvironment } from '../../vendor/RoomEnvironment.js';
-import { DS, MARBLE_R, worldPos, frameAt, surfH, surfSlope, renderH, LIP_W, LIP_H } from './track.js';
+import { DS, MARBLE_R, START_S, worldPos, frameAt, surfH, surfSlope, renderH, LIP_W, LIP_H } from './track.js';
 import { gateAmp } from './sim.js';
 import { skinCanvas, skinMaterial, SKIN_BY_ID } from '../skins.js';
 import { buildFeatures, animateFeatures, buildSky, buildThemeDecor, buildFans } from './extras.js';
@@ -41,6 +41,10 @@ export class World {
     this.marbles = new Map();
     this.tmp = { x: 0, y: 0, z: 0 };
     this.sparks = makeSparks();
+    // a glowing arrow over the marble each split-screen pane is following
+    this.marker = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.42, 16).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false }));
+    this.marker.renderOrder = 11; this.marker.visible = false;
+    this.scene.add(this.marker);
     this.smoke = makeSmoke();
     this.scene.add(this.smoke.group);
     this.shakeT = 0;
@@ -195,12 +199,12 @@ export class World {
 
     // --- start gate, lines, arches ---
     {
-      const f = frameAt(track, 6.2);
+      const f = frameAt(track, START_S);
       const bar = new THREE.Mesh(new THREE.BoxGeometry(f.hw * 2 + 0.6, 0.45, 0.25), new THREE.MeshStandardMaterial({ map: hazardTexture(), roughness: 0.5 }));
-      bar.applyMatrix4(frameMatrix(track, 6.2, 0, 0.55));
+      bar.applyMatrix4(frameMatrix(track, START_S, 0, 0.55));
       bar.castShadow = true; g.add(bar);
       this.startBar = { mesh: bar, base: bar.position.clone(), up: new THREE.Vector3(...f.u) };
-      g.add(curvedStrip(track, 6.45, checkerTexture(8, 1)));
+      g.add(curvedStrip(track, START_S + 0.25, checkerTexture(8, 1)));
       g.add(curvedStrip(track, track.finishS, checkerTexture(8, 1)));
       g.add(finishArch(track, T));
       g.add(startTower(track, T));
@@ -409,11 +413,31 @@ export class World {
   renderPanes() {
     const r = this.renderer, W = window.innerWidth, H = window.innerHeight;
     r.setScissorTest(true);
+    // Lots of panes: work out shadows once per frame (around the middle of the field,
+    // with a wider shadow area) instead of once per pane, which keeps 16 views smooth.
+    const many = this.panes.length > 4;
+    r.shadowMap.autoUpdate = !many;
+    const sc = this.sun.shadow.camera, ext = many ? 70 : 38;
+    if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.updateProjectionMatrix(); }
+    if (many) {
+      const c = new THREE.Vector3(); let n = 0;
+      for (const vis of this.marbles.values()) { c.add(vis.mesh.position); n++; }
+      if (n) { c.divideScalar(n); this.updateShadowFocus(c); }
+      r.shadowMap.needsUpdate = true;
+    }
     for (const p of this.panes) {
       const x = p.rect.x * W, y = (1 - p.rect.y - p.rect.h) * H, w = p.rect.w * W, h = p.rect.h * H;
       r.setViewport(x, y, w, h); r.setScissor(x, y, w, h);
       if (this.shakeT > 0) p.camera.position.add(new THREE.Vector3((Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, 0));
-      this.updateShadowFocus(p.focus);
+      if (!many) this.updateShadowFocus(p.focus);
+      const vis = p.followId && this.marbles.get(p.followId);
+      this.marker.visible = !!vis && this.panes.length > 1;
+      if (vis) {
+        const bob = Math.sin(performance.now() / 180) * 0.08;
+        this.marker.position.copy(vis.mesh.position).add(new THREE.Vector3(0, (vis.hat ? 1.35 : 0.95) + bob, 0));
+        this.marker.material.color.set(p.color || '#ffffff');
+        this.marker.scale.setScalar(this.panes.length > 9 ? 2 : this.panes.length > 4 ? 1.5 : 1);
+      }
       // name tags sized for this pane's camera
       for (const vis of this.marbles.values()) {
         const ls = Math.max(0.42, Math.min(2.4, vis.mesh.position.distanceTo(p.camera.position) * 0.075));
@@ -423,6 +447,7 @@ export class World {
     }
     r.setScissorTest(false);
     r.setViewport(0, 0, W, H);
+    this.marker.visible = false;
   }
 
   updateShadowFocus(target) {
@@ -440,7 +465,12 @@ export class World {
     }
     if (!this.marbles.size) this.smoke.update(dt);
     if (this.panes && this.panes.length) this.renderPanes();
-    else this.renderer.render(this.scene, this.camera);
+    else {
+      this.renderer.shadowMap.autoUpdate = true;
+      const sc = this.sun.shadow.camera;
+      if (sc.right !== 38) { sc.left = -38; sc.right = 38; sc.top = 38; sc.bottom = -38; sc.updateProjectionMatrix(); }
+      this.renderer.render(this.scene, this.camera);
+    }
     if (saved) this.camera.position.copy(saved);
     // automatic quality: if frames are slow, render fewer pixels, then drop shadows
     const a = this.adaptive;
@@ -542,7 +572,7 @@ function finishArch(track, T) {
 
 function startTower(track, T) {
   const g = new THREE.Group();
-  const s = 6.6, f = frameAt(track, s), w = f.hw + LIP_W * 0.6;
+  const s = START_S + 0.4, f = frameAt(track, s), w = f.hw + LIP_W * 0.6;
   const base = renderH(f, w);
   const banner = new THREE.Mesh(new THREE.BoxGeometry(w * 2 + 0.8, 0.9, 0.15), new THREE.MeshStandardMaterial({ map: bannerTexture('START') }));
   banner.applyMatrix4(frameMatrix(track, s, 0, base + 3.2)); g.add(banner);

@@ -52,7 +52,11 @@ The phone shows a live preview of the marble before you confirm. The picture is 
 
 ## Seeing your marble
 
-**TV camera: All marbles** (the default) keeps every marble on screen. While the field is close together it's one view. As it spreads out, the screen splits into up to four panes, each following one group, and each pane is labelled with its positions and names. The pane holding the last-placed human gets a 🍺. **Broadcast** switches back to the cinematic camera, which cuts between leader cam, the pack, trackside and the fight for last.
+**TV camera: Per player** (the default) splits the screen into one view per phone player, each following that player's marble with a glowing arrow over it in their colour. Each view is labelled with the player's place and name, and the last-placed person gets a 🍺. Two players sit side by side, 3–4 get a 2×2, 9 get a 3×3 and 16 get a 4×4. Any spare spot in the grid follows the leader. With more than 4 players, the standings, timer and pause button move into a sidebar so they don't cover anyone's view. Up to 24 marbles race at once (for example 16 phones plus 8 CPU marbles); there's no hard limit on phones, but skins start repeating after 24 players.
+
+**All marbles** keeps every marble on screen instead. While the field is close together it's one view, and as it spreads out the screen splits into up to four panes, each following a group. **Broadcast** is the cinematic camera, cutting between leader cam, the pack, trackside and the fight for last.
+
+With lots of players, the laptop draws the race many times per frame. A decent graphics card handles 16 views fine; if it stutters, the game lowers its quality automatically, or switch to **All marbles**.
 
 Each phone also gets a **live track radar**: a top-down map of the track around your marble, with the way ahead pointing up. It shows walls, the split, slow and fast patches, pegs, moving sweepers, jumps, vapes you can grab, dropped sand bombs, and every rival by name. A tag shows what's next ("Next: The Split in 34 m"). The phone builds its own copy of the track from the race's seed, so only marble positions are sent over Wi-Fi, about ten times a second.
 

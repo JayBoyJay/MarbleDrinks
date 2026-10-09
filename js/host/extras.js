@@ -2,7 +2,7 @@
 // (bumpers, windmills, portals, bounce pads), themed skies and scenery for the
 // Moon, Castle, Candy Land and Neon City, and crowds of marble fans on the banks.
 import * as THREE from 'three';
-import { DS, MARBLE_R, worldPos, frameAt, surfH, renderH, LIP_W } from './track.js';
+import { DS, MARBLE_R, START_S, worldPos, frameAt, surfH, renderH, LIP_W } from './track.js';
 import { skinCanvas, SKINS } from '../skins.js';
 import { frameMatrix, canvasTex, mulberry32 } from './render.js';
 
@@ -374,7 +374,7 @@ function strip(rings, color) {
 export function buildFans(track, terrain) {
   const rand = mulberry32(track.seed ^ 0xfa25);
   const spots = [];
-  const zones = [[0.5, 12], [track.finishS - 12, track.finishS + 14]];
+  const zones = [[0.5, START_S + 6], [track.finishS - 12, track.finishS + 14]];
   for (const sec of track.sections) {
     if (['jump', 'split', 'bridge', 'bumpers', 'windmill', 'portal', 'tramps', 'plunge'].includes(sec.mod)) {
       const mid = (sec.s0 + sec.s1) / 2;

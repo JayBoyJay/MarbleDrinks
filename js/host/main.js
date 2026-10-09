@@ -28,13 +28,16 @@ const state = {
   phase: 'lobby',
   players: new Map(Object.entries(store.load('players', {})).map(([pid, p]) => [pid, { ...p, connected: false, ready: false }])),
   tally: store.load('tally', {}),
-  settings: { bots: 3, boosts: true, steer: 'off', pickups: true, camera: 'all', commentator: true, voiceEngine: 'browser', voices: { browser: ['', ''], kokoro: [...DEFAULT_VOICES.kokoro], server: [...DEFAULT_VOICES.server] }, aiWriter: false, aiModel: '', theme: 'random', length: 'medium', ...store.load('settings', {}) },
+  settings: { bots: 3, boosts: true, steer: 'off', pickups: true, camera: 'players', commentator: true, voiceEngine: 'browser', voices: { browser: ['', ''], kokoro: [...DEFAULT_VOICES.kokoro], server: [...DEFAULT_VOICES.server] }, aiWriter: false, aiModel: '', theme: 'random', length: 'medium', ...store.load('settings', {}) },
   track: null,
   sim: null,
   raceTime: 0,
   results: null,
   countdownT: 0,
 };
+
+// settings saved by older versions: switch them to the new per-player split screen once
+if ((state.settings.v || 0) < 2) { state.settings.camera = 'players'; state.settings.v = 2; store.save('settings', state.settings); }
 
 function savePlayers() {
   const out = {};
@@ -403,7 +406,7 @@ function show(id) {
 }
 
 function entrants() {
-  const list = connectedHumans().map((p) => ({ id: p.pid, name: p.name, skin: p.skin, hat: p.hat || 'none', bot: false }));
+  const list = connectedHumans().map((p) => ({ id: p.pid, name: p.name, skin: p.skin, color: skinColor(p.skin), hat: p.hat || 'none', bot: false }));
   const taken = new Set(list.map((e) => e.skin));
   const free = SKINS.filter((s) => !taken.has(s.id)).sort(() => Math.random() - 0.5);
   for (let i = 0; i < state.settings.bots; i++) list.push({ id: 'bot' + i, name: BOT_NAMES[i], skin: (free[i] || SKINS[i]).id, hat: Math.random() < 0.5 ? HATS[1 + Math.floor(Math.random() * (HATS.length - 1))].id : 'none', bot: true });
@@ -582,6 +585,7 @@ function leaveResults(raceAgain) {
 function renderResults() {
   const R = state.results;
   const list = $('resList'); list.textContent = '';
+  list.classList.toggle('compact', R.order.length > 12);
   const medals = ['🥇', '🥈', '🥉'];
   const winT = R.order[0]?.time;
   R.order.forEach((o, i) => {
@@ -731,6 +735,7 @@ function renderStandings() {
     html += `<div class="${cls}"><div class="pos">${i + 1}</div><img src="${skinPreview(m.skin, 48)}" alt=""><div class="nm">${esc(m.name)}</div><div class="gap">${gap}</div></div>`;
   });
   box.innerHTML = html;
+  box.classList.toggle('compact', st.length > 12);
 
   const dots = $('dots');
   if (dots.children.length !== st.length) { dots.textContent = ''; for (const m of sim.marbles) { const img = document.createElement('img'); img.src = skinPreview(m.skin, 44); img.dataset.id = m.id; dots.appendChild(img); } }
@@ -841,7 +846,7 @@ async function checkAi() {
 }
 
 // ---------------- split-screen pane labels ----------------
-let paneSig = '';
+let paneSig = '', lastSide = -1;
 function renderPaneLabels() {
   const panes = (state.phase === 'race' || state.phase === 'finishing') ? director.panes : null;
   const sig = panes ? panes.map((p) => p.label + JSON.stringify(p.rect)).join('|') : '';
@@ -852,7 +857,12 @@ function renderPaneLabels() {
   for (const p of panes) {
     const d = document.createElement('div'); d.className = 'pane';
     Object.assign(d.style, { left: p.rect.x * 100 + '%', top: p.rect.y * 100 + '%', width: p.rect.w * 100 + '%', height: p.rect.h * 100 + '%' });
-    const l = document.createElement('span'); l.textContent = p.label; if (p.rect.y === 0) l.style.top = '76px'; d.appendChild(l);
+    const l = document.createElement('span'); l.textContent = p.label;
+    // top-row labels sit below the HUD, unless the HUD has moved into the sidebar
+    if (p.rect.y === 0 && !director.sidebar) l.style.top = '76px';
+    if (p.color) { l.style.borderColor = p.color; d.style.boxShadow = `inset 0 0 0 2px rgba(10,6,24,0.9), inset 0 -3px 0 ${p.color}`; }
+    if (panes.length > 9) l.classList.add('small');
+    d.appendChild(l);
     layer.appendChild(d);
   }
 }
@@ -951,6 +961,9 @@ function frame(now) {
   world.syncPickups(inRace ? sim.pickups : null, inRace ? sim.t : 0, now / 1000, realDt, state.settings.pickups);
   if (inRace) world.syncTempZones(sim.tempZones);
   director.style = state.settings.camera;
+  // with lots of players the standings move into a sidebar beside the split screen
+  const side = ['race', 'finishing'].includes(state.phase) ? director.sidebar : 0;
+  if (side !== lastSide) { lastSide = side; $('hud').classList.toggle('side', side > 0); $('hud').style.setProperty('--side', side + 'px'); document.body.style.setProperty('--side', side + 'px'); $('subtitle').classList.toggle('side', side > 0); }
   director.update(dt, sim);
   renderPaneLabels();
 

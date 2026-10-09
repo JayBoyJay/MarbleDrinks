@@ -8,6 +8,8 @@
 export const DS = 0.5;          // sample spacing along the track
 export const BASE_HW = 2.6;     // half width of a normal section
 export const MARBLE_R = 0.45;
+export const START_S = 12;      // where the start gate stands; the grid lines up behind it
+export const GRID_COLS = 4;      // marbles per grid row
 
 export const THEMES = {
   meadow: {
@@ -315,7 +317,7 @@ function buildOnce(seed, themeKey, lengthKey) {
   const labelOf = (m) => (m === 'sandtrap' ? theme.slow.name : m === 'chute' ? theme.fast.name + ' Chute' : MODULES[m].label);
   const entry = (m, dir) => ({ mod: m, label: labelOf(m), built: MODULES[m].make(r, dir) });
 
-  tryLay([{ mod: 'start', label: 'Start', built: { pieces: [{ len: 14, turn: 0, slope: 4 }] } }]);
+  tryLay([{ mod: 'start', label: 'Start', built: { pieces: [{ len: START_S + 10, turn: 0, slope: 4 }] } }]);
 
   for (let i = 0; i < feats.length; i++) {
     let ok = false;
