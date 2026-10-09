@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marble Mayhem</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='44' fill='%23ff3d7f'/><circle cx='36' cy='34' r='12' fill='%23fff' opacity='.7'/></svg>">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+<style>
+  :root {
+    --ink: #f6f3ff; --dim: #b9b3d6; --panel: rgba(16, 12, 34, 0.78); --panel2: rgba(30, 22, 60, 0.85);
+    --line: rgba(255,255,255,0.12); --hot: #ff3d7f; --gold: #ffd23f; --cyan: #3de1ff; --good: #5cff9d; --bad: #ff5a5a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0a1e; color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  canvas#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .hidden { display: none !important; }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 12px; color: var(--ink); background: rgba(255,255,255,0.1); padding: 10px 14px; font-weight: 700; }
+  button:hover { background: rgba(255,255,255,0.18); }
+  button.primary { background: linear-gradient(180deg, #ff5a92, #e6205f); box-shadow: 0 6px 20px rgba(255,61,127,0.35); }
+  button.primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .panel { background: var(--panel); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 20px; }
+  .logo { font-weight: 900; letter-spacing: 0.02em; font-size: 34px; line-height: 1; font-style: italic; text-transform: uppercase; }
+  .logo span { color: var(--hot); }
+  .label { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); font-weight: 700; }
+
+  /* ---------- lobby ---------- */
+  #lobby { position: fixed; inset: 0; display: grid; grid-template-columns: minmax(300px, 380px) 1fr minmax(300px, 400px); gap: 20px; padding: 24px; pointer-events: none; }
+  #lobby > * { pointer-events: auto; }
+  .join { padding: 22px; display: flex; flex-direction: column; gap: 16px; align-self: start; max-height: calc(100vh - 48px); overflow: auto; }
+  .qr { background: #fff; border-radius: 16px; padding: 10px; width: min(100%, 36vh); aspect-ratio: 1; align-self: center; flex: none; }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .url { font-family: ui-monospace, Menlo, monospace; font-size: 15px; background: rgba(0,0,0,0.35); padding: 8px 10px; border-radius: 10px; word-break: break-all; }
+  .settings { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; align-items: center; font-size: 14px; }
+  .settings > span:nth-child(odd) { white-space: nowrap; }
+  .settings > span:nth-child(even) { justify-self: end; max-width: 100%; }
+  .seg { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; background: rgba(0,0,0,0.3); border-radius: 10px; padding: 3px; gap: 2px; }
+  .seg button { padding: 6px 10px; border-radius: 8px; background: transparent; font-size: 13px; }
+  .seg button.on { background: var(--hot); }
+  .stepper { display: inline-flex; align-items: center; gap: 8px; }
+  .stepper button { width: 32px; height: 32px; padding: 0; }
+  .center { display: flex; flex-direction: column; justify-content: flex-end; gap: 16px; }
+  .trackcard { padding: 18px 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+  .trackcard h2 { margin: 0; font-size: 26px; font-style: italic; text-transform: uppercase; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; padding: 4px 9px; border-radius: 99px; background: rgba(255,255,255,0.1); font-weight: 600; }
+  .players { padding: 18px; }
+  .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+  .pcard { position: relative; background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: flex; align-items: center; gap: 10px; }
+  .pcard img { width: 40px; height: 40px; }
+  .pcard .nm { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pcard .st { font-size: 12px; color: var(--dim); }
+  .pcard.ready { border-color: var(--good); box-shadow: 0 0 0 1px var(--good) inset; }
+  .pcard.ready .st { color: var(--good); }
+  .pcard.off { opacity: 0.45; }
+  .pcard .x { position: absolute; top: 4px; right: 6px; background: none; padding: 2px 6px; font-size: 14px; color: var(--dim); }
+  .startrow { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .startrow .primary { font-size: 20px; padding: 14px 28px; }
+  .tally { padding: 20px; align-self: start; max-height: calc(100vh - 48px); overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.08em; padding: 6px 4px; }
+  td { padding: 7px 4px; border-top: 1px solid var(--line); }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  th.n { text-align: right; }
+  td img { width: 22px; height: 22px; vertical-align: middle; margin-right: 6px; }
+  .rules { font-size: 13px; color: var(--dim); line-height: 1.5; margin-top: 14px; }
+  .rules b { color: var(--ink); }
+
+  /* ---------- race HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  .tl { position: absolute; top: 18px; left: 18px; padding: 12px 16px; }
+  .tl .tn { font-weight: 900; font-style: italic; text-transform: uppercase; font-size: 20px; }
+  .tl .sec { color: var(--gold); font-weight: 700; font-size: 14px; }
+  .timer { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); font-size: 30px; font-weight: 900; font-variant-numeric: tabular-nums; padding: 6px 18px; }
+  .standings { position: absolute; top: 18px; right: 18px; width: 270px; padding: 8px; }
+  .row { display: grid; grid-template-columns: 26px 26px 1fr auto; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 8px; font-size: 15px; font-weight: 700; transition: transform 0.25s; }
+  .row img { width: 24px; height: 24px; }
+  .row .pos { font-weight: 900; text-align: center; color: var(--dim); }
+  .row .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .gap { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .row.p1 .pos { color: var(--gold); }
+  .row.lastzone { background: rgba(255, 90, 90, 0.22); }
+  .row.fin .gap { color: var(--good); }
+  .row.bot .nm { color: var(--dim); font-weight: 600; }
+  select { font: inherit; font-size: 13px; max-width: 150px; min-width: 0; background: rgba(0,0,0,0.3); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+  .subtitle b { color: var(--gold); margin-right: 8px; font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .subtitle.dusty { border-left-color: var(--cyan); }
+  .subtitle.dusty b { color: var(--cyan); }
+  .subtitle { position: fixed; left: 50%; bottom: 66px; transform: translateX(-50%); max-width: min(900px, 80vw); text-align: center; background: rgba(10,6,24,0.82); color: #fff; padding: 10px 20px; border-radius: 14px; font-size: 22px; font-weight: 700; z-index: 5; pointer-events: none; border-left: 4px solid var(--gold); }
+  .pausebtn { position: absolute; top: 24px; left: calc(50% + 92px); pointer-events: auto; background: var(--panel); border: 1px solid var(--line); padding: 10px 14px; }
+  #pauseMenu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(8,5,20,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 20; }
+  .pausecard { padding: 30px 34px; display: flex; flex-direction: column; gap: 12px; width: min(420px, 90vw); text-align: center; }
+  .pausecard .big { font-size: 20px; padding: 14px; }
+  .pane { position: absolute; box-shadow: inset 0 0 0 2px rgba(10,6,24,0.9); }
+  .pane span { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); background: rgba(16,12,34,0.8); padding: 4px 12px; border-radius: 99px; font-weight: 800; font-size: 14px; white-space: nowrap; }
+  .caption { position: absolute; bottom: 70px; left: 18px; padding: 6px 12px; font-weight: 900; font-style: italic; letter-spacing: 0.06em; background: var(--hot); border-radius: 8px; font-size: 14px; }
+  .feed { position: absolute; bottom: 110px; left: 18px; display: flex; flex-direction: column; gap: 6px; width: 420px; }
+  .feed div { background: var(--panel); padding: 7px 12px; border-radius: 10px; font-weight: 600; font-size: 15px; animation: pop 0.25s ease-out; border-left: 4px solid var(--hot); }
+  @keyframes pop { from { transform: translateX(-20px); opacity: 0; } }
+  .progress { position: absolute; left: 18px; right: 18px; bottom: 22px; height: 30px; padding: 0 14px; }
+  .progress .bar { position: absolute; left: 14px; right: 14px; top: 13px; height: 4px; background: rgba(255,255,255,0.18); border-radius: 4px; }
+  .progress .flag { position: absolute; right: 6px; top: 4px; font-size: 18px; }
+  .progress img { position: absolute; top: 4px; width: 22px; height: 22px; margin-left: -11px; transition: left 0.1s linear; }
+
+  #countdown { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; }
+  #countdown div { font-size: 26vh; font-weight: 900; font-style: italic; color: #fff; text-shadow: 0 10px 40px rgba(0,0,0,0.5), 0 0 0 #000; -webkit-text-stroke: 4px rgba(0,0,0,0.25); animation: cd 1s ease-out; }
+  @keyframes cd { from { transform: scale(1.8); opacity: 0; } 30% { opacity: 1; } }
+
+  /* ---------- results ---------- */
+  #results { position: fixed; inset: 0; display: grid; grid-template-columns: 1fr 1.15fr; gap: 20px; padding: 24px; align-items: start; }
+  #results .panel { padding: 22px; }
+  .podium { display: flex; flex-direction: column; gap: 6px; }
+  .rrow { display: grid; grid-template-columns: 40px 34px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 10px; font-weight: 700; }
+  .rrow img { width: 32px; height: 32px; }
+  .rrow .p { font-size: 20px; font-weight: 900; text-align: center; }
+  .rrow .t { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .rrow .pts { color: var(--gold); font-size: 13px; }
+  .rrow.first { background: linear-gradient(90deg, rgba(255,210,63,0.3), transparent); }
+  .rrow.bot { opacity: 0.6; }
+  .cons { display: flex; flex-direction: column; gap: 12px; }
+  .ccard { background: var(--panel2); border-radius: 16px; padding: 14px 16px; border: 1px solid var(--line); }
+  .ccard .who { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 900; }
+  .ccard .who img { width: 36px; height: 36px; }
+  .ccard .what { color: var(--dim); font-weight: 600; margin-top: 2px; }
+  .ccard.give { border-color: rgba(92, 255, 157, 0.5); }
+  .ccard.take { border-color: rgba(255, 90, 90, 0.6); }
+  .ccard .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .ccard .opts button { font-size: 13px; padding: 6px 10px; }
+  .damage { margin-top: 6px; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  .dmg { background: rgba(255,90,90,0.16); border: 1px solid rgba(255,90,90,0.5); border-radius: 14px; padding: 12px; display: flex; gap: 10px; align-items: center; }
+  .dmg img { width: 40px; height: 40px; }
+  .dmg b { display: block; font-size: 18px; }
+  .dmg span { font-size: 22px; }
+  h3 { margin: 0 0 12px; font-style: italic; text-transform: uppercase; font-size: 22px; }
+  .note { color: var(--dim); font-size: 13px; }
+  .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--panel2); padding: 10px 18px; border-radius: 12px; font-weight: 700; border: 1px solid var(--line); z-index: 10; }
+  #startAudio { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); }
+
+  @media (max-width: 1100px) {
+    #lobby { grid-template-columns: 1fr 1fr; overflow: auto; }
+    #lobby .center { grid-column: 1 / -1; order: 3; }
+    #results { grid-template-columns: 1fr; overflow: auto; }
+  }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<!-- LOBBY -->
+<div id="lobby">
+  <div class="join panel">
+    <div class="logo">Marble <span>Mayhem</span></div>
+    <div class="label">Scan to join with your phone</div>
+    <div class="qr" id="qr"></div>
+    <div class="url" id="url">…</div>
+    <div class="note" id="netnote">Phones must be on the same Wi-Fi as this computer.</div>
+    <div class="settings">
+      <span>CPU marbles</span>
+      <span class="stepper"><button data-bots="-1">−</button><b id="botCount">3</b><button data-bots="1">+</button></span>
+      <span>Phone boosts</span>
+      <span class="seg" id="boostSeg"><button data-v="on">On</button><button data-v="off">Off</button></span>
+      <span>Power-ups</span>
+      <span class="seg" id="pickSeg"><button data-v="on">On</button><button data-v="off">Off</button></span>
+      <span>TV camera</span>
+      <span class="seg" id="camSeg"><button data-v="all">All marbles</button><button data-v="broadcast">Broadcast</button></span>
+      <span>Tilt steering</span>
+      <span class="seg" id="steerSeg"><button data-v="off">Off</button><button data-v="tilt">📱 Tilt</button></span>
+      <span>Terrain</span>
+      <span class="seg" id="themeSeg"><button data-v="random">🎲</button><button data-v="meadow">🌳</button><button data-v="desert">🌵</button><button data-v="snow">❄️</button><button data-v="lava">🌋</button><button data-v="moon">🌙</button><button data-v="castle">🏰</button><button data-v="candy">🍭</button><button data-v="neon">🌃</button></span>
+      <span>Track length</span>
+      <span class="seg" id="lenSeg"><button data-v="short">Short</button><button data-v="medium">Med</button><button data-v="long">Long</button></span>
+    </div>
+  </div>
+
+  <div class="center">
+    <div class="trackcard panel">
+      <div>
+        <div class="label">Next track</div>
+        <h2 id="trackName">…</h2>
+      </div>
+      <div class="chips" id="trackChips"></div>
+      <button id="reroll" style="margin-left:auto">🔀 New track</button>
+    </div>
+    <div class="players panel">
+      <div class="startrow">
+        <div>
+          <div class="label">Racers</div>
+          <div class="note" id="readyNote">Waiting for players to join…</div>
+        </div>
+        <button class="primary" id="startBtn">Start race</button>
+      </div>
+      <div class="pgrid" id="pgrid"></div>
+    </div>
+  </div>
+
+  <div class="tally panel">
+    <h3>Tally</h3>
+    <table>
+      <thead><tr><th>#</th><th>Racer</th><th class="n">Pts</th><th class="n">Wins</th><th class="n" title="Drinks taken">🍺</th><th class="n" title="Sips taken">🥃</th></tr></thead>
+      <tbody id="tallyBody"></tbody>
+    </table>
+    <div class="rules">
+      <b>After each race</b><br>
+      🥇 Winner picks someone to take a <b>drink</b><br>
+      🥈 Second place picks someone to take a <b>sip</b><br>
+      🐌 Last place takes a <b>drink</b><br>
+      🐢 Second last takes a <b>sip</b><br>
+      <span class="note">Only phone players count (CPU marbles race but never drink). Water counts — play nice.</span>
+    </div>
+    <div class="booth">
+      <h3 style="margin-top:18px">🎙️ Commentary booth</h3>
+      <div class="note" style="margin:-6px 0 10px">Ray Marbles calls the action, Dusty Rollins brings the banter.</div>
+      <div class="settings">
+        <span>Commentators</span>
+        <span class="seg" id="comSeg"><button data-v="on">On</button><button data-v="off">Off</button></span>
+        <span>Voices</span>
+        <span class="seg" id="engSeg"><button data-v="browser" title="The computer's built-in voices">Built-in</button><button data-v="kokoro" title="Natural voice running in this browser">Kokoro</button><button data-v="server" title="A local voice server, e.g. Kokoro-FastAPI">Server</button></span>
+        <span>Ray</span>
+        <span><select id="voiceSel"></select></span>
+        <span>Dusty</span>
+        <span><select id="voiceSel2"></select></span>
+        <span>AI banter</span>
+        <span class="seg" id="aiSeg"><button data-v="off">Off</button><button data-v="on">On</button></span>
+        <span>AI model</span>
+        <span><select id="aiModel"></select></span>
+      </div>
+      <div class="note" id="voiceStatus" style="margin-top:8px"></div>
+      <button id="voiceTest" style="margin-top:8px">🔊 Test the booth</button>
+    </div>
+    <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap">
+      <button id="resetTally">Reset tally</button>
+      <button id="fullscreen">⛶ Fullscreen</button>
+    </div>
+  </div>
+</div>
+
+<!-- RACE HUD -->
+<div id="hud" class="hidden">
+  <div class="tl panel"><div class="tn" id="hudTrack"></div><div class="sec" id="hudSection"></div></div>
+  <div class="timer panel" id="hudTimer">0:00.0</div>
+  <button class="pausebtn" id="pauseBtn" title="Pause (Esc)">⏸ Pause</button>
+  <div class="standings panel" id="hudStandings"></div>
+  <div class="feed" id="feed"></div>
+  <div id="paneLayer"></div>
+  <div class="caption hidden" id="caption"></div>
+  <div class="progress panel"><div class="bar"></div><div class="flag">🏁</div><div id="dots"></div></div>
+</div>
+
+<div id="countdown"></div>
+
+<!-- PAUSE MENU -->
+<div id="pauseMenu" class="hidden">
+  <div class="panel pausecard">
+    <div class="logo" style="font-size:44px">Paused</div>
+    <div class="note">The race is frozen. Phones show it's paused too.</div>
+    <button class="primary big" id="resumeBtn">▶ Resume</button>
+    <button class="big" id="restartBtn">↻ Restart race</button>
+    <button class="big" id="exitBtn">🏠 Exit to main menu</button>
+    <div class="note">Esc, P or Space also pauses and resumes. Exiting or restarting doesn't count the race on the tally.</div>
+  </div>
+</div>
+<div id="subtitle" class="subtitle hidden"></div>
+
+<!-- RESULTS -->
+<div id="results" class="hidden">
+  <div class="panel">
+    <h3 id="resTitle">Results</h3>
+    <div class="podium" id="resList"></div>
+  </div>
+  <div class="panel">
+    <h3>The damage</h3>
+    <div class="cons" id="cons"></div>
+    <div style="margin-top:16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+      <button class="primary" id="nextBtn">Race again →</button>
+      <button id="menuBtn">🏠 Main menu</button>
+      <span class="note" id="nextNote"></span>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/host/main.js"></script>
+</body>
+</html>

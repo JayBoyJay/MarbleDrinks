@@ -1,0 +1,11 @@
+{
+  "name": "marble-mayhem",
+  "version": "0.8.0",
+  "description": "Party marble-racing game: three.js race screen + phones as remotes. Runs on GitHub Pages (peer-to-peer) or a local Wi-Fi server.",
+  "private": true,
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}
