@@ -72,21 +72,15 @@ Each phone also gets a **live track radar**: a top-down map of the track around 
 
 Two commentators call every race: **Ray Marbles** on play-by-play (overtakes, power-ups, distance calls, the finish) and **Dusty Rollins** on colour (reactions, banter, who's in drinking territory). They know about rivalries between players, comebacks from last, photo finishes, the tally ("Priya has had four drinks already"), and they read out the damage at the end. Bigger moments are delivered faster and more excitedly, and every line shows as a subtitle on the TV. Set it all up in the **🎙️ Commentary booth** card in the lobby, and use **Test the booth** to hear it.
 
-### Voices (pick one in the lobby)
+### Voices: Kitten TTS
 
-| Option | Sounds | Setup |
-|---|---|---|
-| **Built-in** | Robotic-ish | None. Uses the computer's own voices, offline. |
-| **Kokoro** | Natural | None. Kokoro-82M runs inside the race screen's browser. It needs internet the first time to download the voice model (cached afterwards). Fastest in Chrome or Edge with a decent graphics card. |
-| **Server** | Natural, fastest | Local version only. Run a local voice server (below). Best if the laptop is slow, or you want it fully offline after setup. |
+The booth speaks with **Kitten TTS**, a small text-to-speech model that runs on your own computer. Pick the two voices for Ray and Dusty in the lobby, then use **Test the booth** to hear them.
 
-The **Server** option works with Kokoro-FastAPI (install Docker, then run one command):
-```
-docker run -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-cpu:latest
-```
-(For an NVIDIA graphics card, use `--gpus all` and `ghcr.io/remsky/kokoro-fastapi-gpu:latest`.) Any other server with an OpenAI-style `/v1/audio/speech` endpoint works too. Point the game at it with `TTS_URL=http://host:port/v1/audio/speech npm start`.
-
-Kokoro voices to try: *George* or *Fable* (British) for Ray, *Michael* or *Adam* (American) for Dusty.
+- It needs the local version (`start.bat`). The online version (GitHub Pages) shows the commentary as captions only.
+- One-time setup: install Python, then run `pip install kittentts soundfile numpy`. Kitten TTS also needs **espeak-ng** for pronunciation (install it from the espeak-ng releases page).
+- `start.bat` starts the voice service in its own window when Python is found. You can also run it yourself with `python server/kitten.py`.
+- A bigger model sounds better but is slower: `KITTEN_MODEL=KittenML/kitten-tts-mini-0.8 python server/kitten.py`.
+- If the voice service isn't running, the game still works and the booth shows captions.
 
 ### AI banter (optional, local version only)
 
@@ -193,9 +187,10 @@ js/host/
   hats3d.js             3D hats
   camera.js             all-marbles split screen and broadcast camera
   commentator.js        the commentary booth
-  voices.js             built-in, Kokoro and voice-server engines
+  voices.js             Kitten TTS voices (through the local server)
 vendor/                 three.js r170
 server/server.js        optional local Wi-Fi server (also the voice/AI proxy)
+server/kitten.py         Kitten TTS voice service the local server talks to
 server/lib/             bundled ws (WebSocket) and QR encoder, so no npm install is needed
 start.bat               starts the local server on Windows
 ```
@@ -204,7 +199,6 @@ start.bat               starts the local server on Windows
 
 - More modules: funnels, elevators, water sections, elimination races.
 - Sound effects for rolling and collisions.
-- A more natural commentator voice from a local text-to-speech model (such as Piper or Kokoro), running beside the server.
 - Voice commands with a speech-to-text model such as Phonon-2: shout "boost!" or "use it!" at your phone.
 - Season mode with team marbles, like the Marble League.
 

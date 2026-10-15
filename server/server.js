@@ -1,7 +1,7 @@
 // Marble Mayhem — optional local server.
 // The game normally runs from GitHub Pages with phones connecting peer-to-peer. This server is for
 // playing on your own Wi-Fi without internet: it serves the site, relays phone messages over
-// WebSockets, and adds the local voice server / local AI options for the commentary booth.
+// WebSockets, and passes commentary voices (Kitten TTS, server/kitten.py) and the optional local AI through.
 // No npm install needed: run `node server/server.js` (or start.bat).
 
 const http = require('http');
@@ -104,16 +104,15 @@ function serveFile(res, file) {
   });
 }
 
-// ---------- optional local AI helpers ----------
-// A natural commentator voice from any OpenAI-compatible text-to-speech server
-// (e.g. Kokoro-FastAPI on port 8880), and colour commentary from any
+// ---------- optional local helpers ----------
+// Commentator voices come from Kitten TTS, a small text-to-speech model run by
+// server/kitten.py on its own port. Colour commentary can come from any
 // OpenAI-compatible local language model (e.g. Ollama on port 11434 or LM Studio
-// on 1234). The game works without either; these just make the booth better.
-const TTS_URL = process.env.TTS_URL || 'http://127.0.0.1:8880/v1/audio/speech';
-const TTS_MODEL = process.env.TTS_MODEL || 'kokoro';
+// on 1234). The game works without either; they just make the booth better.
+const TTS_URL = process.env.TTS_URL || 'http://127.0.0.1:8190';
 const LLM_URL = process.env.LLM_URL || 'http://127.0.0.1:11434/v1/chat/completions';
 const LLM_MODEL = process.env.LLM_MODEL || '';
-const apiBase = (u) => u.replace(/\/(audio\/speech|chat\/completions)\/?$/, '');
+const apiBase = (u) => u.replace(/\/chat\/completions\/?$/, '');
 
 function readJson(req, limit = 200_000) {
   return new Promise((resolve, reject) => {
@@ -130,14 +129,14 @@ async function timedFetch(url, opts = {}, ms = 8000) {
 async function proxyTts(req, res) {
   try {
     const b = await readJson(req);
-    const r = await timedFetch(TTS_URL, {
+    const r = await timedFetch(TTS_URL.replace(/\/+$/, '') + '/tts', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: TTS_MODEL, input: String(b.input || '').slice(0, 400), voice: b.voice || 'bm_george', speed: Number(b.speed) || 1, response_format: 'mp3' }),
+      body: JSON.stringify({ text: String(b.input || '').slice(0, 400), voice: b.voice || 'Jasper', speed: Number(b.speed) || 1 }),
     }, 15000);
-    if (!r.ok) { res.writeHead(502); res.end(`voice server: ${r.status}`); return; }
-    res.writeHead(200, { 'Content-Type': r.headers.get('content-type') || 'audio/mpeg' });
+    if (!r.ok) { res.writeHead(502); res.end(`Kitten TTS: ${r.status}`); return; }
+    res.writeHead(200, { 'Content-Type': 'audio/wav', 'Cache-Control': 'no-cache' });
     res.end(Buffer.from(await r.arrayBuffer()));
-  } catch (e) { res.writeHead(502); res.end(`voice server unreachable: ${e.message}`); }
+  } catch (e) { res.writeHead(502); res.end(`Kitten TTS unreachable: ${e.message}`); }
 }
 let llmModels = [];
 async function proxyLlm(req, res) {
@@ -160,9 +159,7 @@ async function aiStatus(res) {
   const out = { tts: false, ttsUrl: TTS_URL, llm: false, llmUrl: LLM_URL, models: [] };
   await Promise.all([
     (async () => {
-      for (const path of ['/audio/voices', '/models']) {
-        try { const r = await timedFetch(apiBase(TTS_URL) + path, {}, 1200); if (r.ok) { out.tts = true; return; } } catch {}
-      }
+      try { const r = await timedFetch(TTS_URL.replace(/\/+$/, '') + '/health', {}, 1200); if (r.ok) out.tts = true; } catch {}
     })(),
     (async () => {
       try {

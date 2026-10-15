@@ -4,9 +4,10 @@
 // Race events become lines; each line has an energy level that speeds up and
 // lifts the delivery. Lines are queued by priority and dropped when stale, so
 // the booth keeps up with the race instead of reading old news.
+// Voices are Kitten TTS (through the local server). Every line is also shown as a caption.
 // Optionally a local AI model writes Dusty's colour lines in quiet moments.
 import { POWERS } from '../powers.js';
-import { BrowserEngine, KokoroEngine, ServerEngine, stopAudio } from './voices.js';
+import { KittenEngine, stopAudio } from './voices.js';
 
 export const BOOTH = ['Ray Marbles', 'Dusty Rollins'];
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -96,27 +97,20 @@ const POWER_LINES = {
 export class Commentator {
   constructor({ onCaption, onStatus } = {}) {
     this.enabled = true;
-    this.engineKind = 'browser';
     this.voiceNames = ['', ''];
     this.ai = false;
     this.queue = [];
     this.current = null;
     this.onCaption = onCaption || (() => {});
     this.onStatus = onStatus || (() => {});
-    this.engines = { browser: new BrowserEngine() };
     this.lastSaid = 0;
     this.recent = new Map();
     this.aiBusy = false;
   }
 
   // ---------------- voices ----------------
-  setEngine(kind) {
-    this.engineKind = kind;
-    if (kind === 'kokoro' && !this.engines.kokoro) { this.engines.kokoro = new KokoroEngine(this.onStatus); this.engines.kokoro.load().catch(() => {}); }
-    if (kind === 'server' && !this.engines.server) this.engines.server = new ServerEngine(this.onStatus);
-  }
-  engine() { return this.engines[this.engineKind] || this.engines.browser; }
-  browserVoices() { return this.engines.browser.voices(); }
+  // The booth always speaks with Kitten TTS. The engine is created once and kept.
+  get engine() { return this._engine ||= new KittenEngine(this.onStatus); }
 
   // ---------------- queue ----------------
   say(text, prio = 1, ttl = 4, { speaker = 0, energy = 0.5 } = {}) {
@@ -164,21 +158,20 @@ export class Commentator {
     this.current = item;
     this.lastSaid = now;
     this.onCaption(item.text, BOOTH[item.speaker]);
-    const eng = this.engine();
     const voice = this.voiceNames[item.speaker] || '';
     try {
       await Promise.race([
-        eng.speak(item.text, { voice, speaker: item.speaker, energy: item.energy }),
+        this.engine.speak(item.text, { voice, speaker: item.speaker, energy: item.energy }),
         new Promise((r) => setTimeout(r, 2500 + item.text.length * 120)),
       ]);
     } catch (e) {
-      // a natural voice failed: say it with the built-in voice instead
-      if (eng !== this.engines.browser) { this.onStatus(`Voice error (${e.message || e}); using browser voice for now.`); await this.engines.browser.speak(item.text, { speaker: item.speaker, energy: item.energy }); }
+      // no voice server or Kitten isn't running: the caption above still shows the line
+      if (!this.engine.warned) { this.engine.warned = true; this.onStatus(`Voice unavailable (${e.message || e}). Captions only.`); }
     }
     if (this.current === item) { this.current = null; this.lastSaid = performance.now(); setTimeout(() => this.pump(), 120); }
   }
 
-  interrupt() { this.engine().stop(); stopAudio(); this.current = null; }
+  interrupt() { stopAudio(); this.current = null; }
   quietFor() { return this.current ? 0 : (performance.now() - this.lastSaid) / 1000; }
   stop() { this.queue = []; this.interrupt(); this.onCaption(''); }
 

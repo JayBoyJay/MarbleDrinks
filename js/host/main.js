@@ -10,7 +10,7 @@ import { HostNet } from '../net.js';
 import { qrSvg } from '../qr.js';
 import { HATS, HAT_IDS } from '../hats.js';
 import { Commentator, NTH, BOOTH, words } from './commentator.js';
-import { KOKORO_VOICES, DEFAULT_VOICES } from './voices.js';
+import { KITTEN_VOICES, DEFAULT_VOICES } from './voices.js';
 
 const $ = (id) => document.getElementById(id);
 const BOT_NAMES = ['Rollo', 'Clink', 'Pebbles', 'Sir Bounce', 'Glassy', 'Swirly', 'Mibs', 'Bonk', 'Taw', 'Shooter'];
@@ -28,7 +28,7 @@ const state = {
   phase: 'lobby',
   players: new Map(Object.entries(store.load('players', {})).map(([pid, p]) => [pid, { ...p, connected: false, ready: false }])),
   tally: store.load('tally', {}),
-  settings: { bots: 3, boosts: true, steer: 'off', pickups: true, camera: 'players', commentator: true, voiceEngine: 'browser', voices: { browser: ['', ''], kokoro: [...DEFAULT_VOICES.kokoro], server: [...DEFAULT_VOICES.server] }, aiWriter: false, aiModel: '', theme: 'random', length: 'medium', ...store.load('settings', {}) },
+  settings: { bots: 3, boosts: true, steer: 'off', pickups: true, camera: 'players', commentator: true, voices: { kitten: [...DEFAULT_VOICES.kitten] }, aiWriter: false, aiModel: '', theme: 'random', length: 'medium', ...store.load('settings', {}) },
   track: null,
   sim: null,
   raceTime: 0,
@@ -264,7 +264,7 @@ function connectedHumans() { return humans().filter((p) => p.connected); }
 
 function renderLobby() {
   $('botCount').textContent = state.settings.bots;
-  for (const [seg, key] of [['boostSeg', 'boosts'], ['pickSeg', 'pickups'], ['steerSeg', 'steer'], ['camSeg', 'camera'], ['comSeg', 'commentator'], ['engSeg', 'voiceEngine'], ['aiSeg', 'aiWriter'], ['themeSeg', 'theme'], ['lenSeg', 'length']]) {
+  for (const [seg, key] of [['boostSeg', 'boosts'], ['pickSeg', 'pickups'], ['steerSeg', 'steer'], ['camSeg', 'camera'], ['comSeg', 'commentator'], ['aiSeg', 'aiWriter'], ['themeSeg', 'theme'], ['lenSeg', 'length']]) {
     for (const b of $(seg).querySelectorAll('button')) {
       const val = ['boosts', 'pickups', 'commentator', 'aiWriter'].includes(key) ? (b.dataset.v === 'on') : b.dataset.v;
       b.classList.toggle('on', state.settings[key] === val);
@@ -330,9 +330,8 @@ function bindLobby() {
   for (const b of document.querySelectorAll('[data-bots]')) b.onclick = () => { state.settings.bots = Math.max(0, Math.min(8, state.settings.bots + Number(b.dataset.bots))); saveSettings(); };
   for (const b of $('boostSeg').querySelectorAll('button')) b.onclick = () => { state.settings.boosts = b.dataset.v === 'on'; saveSettings(); pushViews(); };
   for (const b of $('comSeg').querySelectorAll('button')) b.onclick = () => { state.settings.commentator = b.dataset.v === 'on'; caster.enabled = state.settings.commentator; if (!caster.enabled) caster.stop(); saveSettings(); };
-  for (const b of $('engSeg').querySelectorAll('button')) b.onclick = () => { unlockAudio(); state.settings.voiceEngine = b.dataset.v; applyVoiceSettings(); saveSettings(); checkAi(); };
   for (const b of $('aiSeg').querySelectorAll('button')) b.onclick = () => { state.settings.aiWriter = b.dataset.v === 'on'; applyVoiceSettings(); saveSettings(); checkAi(); };
-  for (const [sel, i] of [['voiceSel', 0], ['voiceSel2', 1]]) $(sel).onchange = () => { state.settings.voices[state.settings.voiceEngine][i] = $(sel).value; applyVoiceSettings(); saveSettings(); };
+  for (const [sel, i] of [['voiceSel', 0], ['voiceSel2', 1]]) $(sel).onchange = () => { state.settings.voices.kitten[i] = $(sel).value; applyVoiceSettings(); saveSettings(); };
   $('aiModel').onchange = () => { state.settings.aiModel = $('aiModel').value; saveSettings(); };
   $('voiceTest').onclick = () => {
     unlockAudio(); const was = caster.enabled; caster.enabled = true;
@@ -341,9 +340,8 @@ function bindLobby() {
     if (state.settings.aiWriter) caster.aiLine('Introduce yourself to the party in one line.', { track: THEMES[state.track.theme].name }, 4.8, 30);
     caster.enabled = was;
   };
-  state.settings.voices = { browser: ['', ''], kokoro: [...DEFAULT_VOICES.kokoro], server: [...DEFAULT_VOICES.server], ...(state.settings.voices || {}) };
+  state.settings.voices = { kitten: [...DEFAULT_VOICES.kitten], ...(state.settings.voices || {}) };
   applyVoiceSettings();
-  if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = renderVoices;
   checkAi();
   for (const b of $('camSeg').querySelectorAll('button')) b.onclick = () => { state.settings.camera = b.dataset.v; director.style = b.dataset.v; saveSettings(); };
   for (const b of $('pickSeg').querySelectorAll('button')) b.onclick = () => { state.settings.pickups = b.dataset.v === 'on'; saveSettings(); pushViews(); };
@@ -550,7 +548,7 @@ function setPaused(on) {
   state.paused = on;
   $('pauseMenu').classList.toggle('hidden', !on);
   $('pauseBtn').classList.toggle('hidden', on);
-  if (on) { caster.stop(); window.speechSynthesis?.cancel(); }
+  if (on) caster.stop();
   else caster.say('And we are back underway!', 2, 3, { speaker: 0, energy: 0.6 });
   pushViews();
 }
@@ -808,24 +806,18 @@ function colourCommentary() {
 function applyVoiceSettings() {
   const S = state.settings;
   caster.enabled = S.commentator;
-  caster.setEngine(S.voiceEngine);
-  caster.voiceNames = S.voices[S.voiceEngine] || ['', ''];
+  caster.voiceNames = S.voices.kitten || ['', ''];
   caster.ai = S.aiWriter;
   caster.aiModel = S.aiModel;
   renderVoices();
 }
 function renderVoices() {
-  const eng = state.settings.voiceEngine;
-  const opts = eng === 'browser'
-    ? [['', 'Automatic'], ...caster.browserVoices().map((v) => [v.name, `${v.name} (${v.lang})`])]
-    : KOKORO_VOICES;
   for (const [id, i] of [['voiceSel', 0], ['voiceSel2', 1]]) {
     const sel = $(id); sel.textContent = '';
-    for (const [v, label] of opts) { const o = document.createElement('option'); o.value = v; o.textContent = label; sel.appendChild(o); }
-    sel.value = state.settings.voices[eng]?.[i] ?? '';
+    for (const [v, label] of KITTEN_VOICES) { const o = document.createElement('option'); o.value = v; o.textContent = label; sel.appendChild(o); }
+    sel.value = state.settings.voices.kitten?.[i] ?? DEFAULT_VOICES.kitten[i];
   }
-  if (eng === 'browser') $('voiceStatus').textContent = 'Built-in voices: instant and offline, but a bit robotic. Kokoro sounds far more natural.';
-  if (eng === 'kokoro' && !caster.engines.kokoro?.ready && !$('voiceStatus').textContent.startsWith('Downloading')) $('voiceStatus').textContent = 'Kokoro runs right here in the browser. The first time it downloads the voice model (needs internet once).';
+  if (net.mode !== 'ws') $('voiceStatus').textContent = 'Voices need the local server (start.bat). This online version shows the booth as captions only.';
 }
 // is a local voice server / AI model running? (checked through the game server)
 let aiInfo = null;
@@ -840,7 +832,7 @@ async function checkAi() {
   for (const m of models) { const o = document.createElement('option'); o.value = m; o.textContent = m; sel.appendChild(o); }
   if (S.aiModel && models.includes(S.aiModel)) sel.value = S.aiModel; else { S.aiModel = models[0] || ''; caster.aiModel = S.aiModel; }
   const notes = [];
-  if (S.voiceEngine === 'server') notes.push(localOnly ? `⚠️ The voice server option${localOnly}. Pick Kokoro to get the natural voice right here.` : aiInfo?.tts ? '✅ Voice server connected.' : `⚠️ No voice server at ${aiInfo?.ttsUrl || 'port 8880'}. Start Kokoro-FastAPI (see README), or pick Kokoro to run it in the browser.`);
+  if (net.mode === 'ws') notes.push(aiInfo?.tts ? '✅ Kitten voices connected.' : `⚠️ Kitten TTS isn't running at ${aiInfo?.ttsUrl || 'its port'}, so the booth shows captions only. Start it with start.bat (see README).`);
   if (S.aiWriter) notes.push(localOnly ? `⚠️ AI banter${localOnly}; the scripted lines still play.` : aiInfo?.llm ? `✅ AI banter on (${S.aiModel || 'default model'}).` : '⚠️ No local AI found. Start Ollama or LM Studio (see README); the scripted lines still play.');
   if (notes.length) $('voiceStatus').textContent = notes.join(' ');
 }
