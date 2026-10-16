@@ -88,17 +88,29 @@ def stage_manual_copy():
 
 
 def prepare_model():
-    """Make sure the model is in the local cache. Downloads it once if there's no copy yet."""
+    """Make sure the model is in the local cache, downloading it once if needed.
+    Returns the folder holding the model files, or None."""
     if stage_manual_copy():
         os.environ['HF_HUB_OFFLINE'] = '1'
-        return
+        return os.path.join(REPO_CACHE, 'snapshots', 'local')
     try:
         from huggingface_hub import snapshot_download
         print(f'Downloading {MODEL} once into {HUB_DIR} ...', flush=True)
-        snapshot_download(repo_id=MODEL, cache_dir=HUB_DIR)
+        folder = snapshot_download(repo_id=MODEL, cache_dir=HUB_DIR)
         os.environ['HF_HUB_OFFLINE'] = '1'
+        return folder
     except Exception as e:
         print(f'Could not download {MODEL}: {e}', file=sys.stderr, flush=True)
+        return None
+
+
+def model_file(folder):
+    """kittentts loads the ONNX model file itself, so find it in the model folder."""
+    if folder and os.path.isdir(folder):
+        onnx = sorted(f for f in os.listdir(folder) if f.lower().endswith('.onnx'))
+        if onnx:
+            return os.path.join(folder, onnx[0])
+    raise RuntimeError(f'No .onnx model file found for {MODEL}. Check that server/models/{MODEL.split("/")[-1]} contains the model files.')
 
 
 def load_model():
@@ -107,9 +119,9 @@ def load_model():
         if not find_espeak():
             raise RuntimeError(ESPEAK_HELP)
         from kittentts import KittenTTS
-        prepare_model()
-        print(f'Loading Kitten TTS model {MODEL} ...', flush=True)
-        _model = KittenTTS(MODEL)
+        source = model_file(prepare_model())
+        print(f'Loading Kitten TTS model from {source} ...', flush=True)
+        _model = KittenTTS(source)
         print('Kitten TTS ready.', flush=True)
     return _model
 
