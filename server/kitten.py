@@ -17,6 +17,7 @@ start.bat and `node server/server.js` find it on port 8190 automatically.
 import io
 import json
 import os
+import shutil
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -31,10 +32,42 @@ MAX_CHARS = 400
 _model = None
 _lock = threading.Lock()  # the model is not thread-safe, so one line at a time
 
+ESPEAK_HELP = (
+    'Kitten TTS needs espeak-ng to pronounce words, and it could not be found.\n'
+    '  Windows: install espeak-ng from https://github.com/espeak-ng/espeak-ng/releases (the .msi installer),\n'
+    '           then close this window and run start.bat again.\n'
+    '  Mac:     brew install espeak-ng\n'
+    '  Linux:   sudo apt install espeak-ng'
+)
+
+
+def find_espeak():
+    """Point phonemizer (used by Kitten TTS) at espeak-ng, even if it isn't on PATH."""
+    if os.environ.get('PHONEMIZER_ESPEAK_PATH') and os.path.exists(os.environ['PHONEMIZER_ESPEAK_PATH']):
+        return True
+    candidates = [shutil.which('espeak-ng'), shutil.which('espeak')]
+    if sys.platform.startswith('win'):
+        for base in (os.environ.get('ProgramFiles'), os.environ.get('ProgramFiles(x86)')):
+            if base:
+                candidates.append(os.path.join(base, 'eSpeak NG', 'espeak-ng.exe'))
+    for exe in candidates:
+        if exe and os.path.exists(exe):
+            os.environ['PHONEMIZER_ESPEAK_PATH'] = exe
+            lib_dir = os.path.dirname(exe)
+            for lib in ('libespeak-ng.dll', 'libespeak-ng.so', 'libespeak-ng.dylib'):
+                full = os.path.join(lib_dir, lib)
+                if os.path.exists(full):
+                    os.environ.setdefault('PHONEMIZER_ESPEAK_LIBRARY', full)
+                    break
+            return True
+    return False
+
 
 def load_model():
     global _model
     if _model is None:
+        if not find_espeak():
+            raise RuntimeError(ESPEAK_HELP)
         from kittentts import KittenTTS
         print(f'Loading Kitten TTS model {MODEL} ...', flush=True)
         _model = KittenTTS(MODEL)
