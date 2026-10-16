@@ -7,8 +7,12 @@ if errorlevel 1 (
   pause
   exit /b
 )
-where python 1>NUL 2>NUL
-if not errorlevel 1 start "Kitten TTS voices" /min cmd /k "cd /d "%~dp0" && python server\kitten.py"
+if exist "%~dp0server\venv\Scripts\python.exe" (
+  start "Kitten TTS voices" /min cmd /k "cd /d "%~dp0" && server\venv\Scripts\python.exe server\kitten.py"
+) else (
+  where python 1>NUL 2>NUL
+  if not errorlevel 1 start "Kitten TTS voices" /min cmd /k "cd /d "%~dp0" && python server\kitten.py"
+)
 start "" /min cmd /c "timeout /t 2 1>NUL & start http://localhost:3000"
 node server\server.js
 pause

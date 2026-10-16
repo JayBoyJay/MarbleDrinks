@@ -77,7 +77,12 @@ Two commentators call every race: **Ray Marbles** on play-by-play (overtakes, po
 The booth speaks with **Kitten TTS**, a small text-to-speech model that runs on your own computer. Pick the two voices for Ray and Dusty in the lobby, then use **Test the booth** to hear them.
 
 - It needs the local version (`start.bat`). The online version (GitHub Pages) shows the commentary as captions only.
-- One-time setup: install Python, then run `pip install kittentts soundfile numpy`. Kitten TTS also needs **espeak-ng** for pronunciation (install it from the espeak-ng releases page).
+- One-time setup (Windows): install **Python 3.12** from python.org. Kitten TTS doesn't install on Python 3.13 yet. Then, in the MarbleDrinks folder, run:
+  ```
+  py -3.12 -m venv server\venv
+  server\venv\Scripts\pip install https://github.com/KittenML/KittenTTS/releases/download/0.1/kittentts-0.1.0-py3-none-any.whl
+  ```
+  `start.bat` uses that environment automatically. Kitten TTS also needs **espeak-ng** for pronunciation (install it from the espeak-ng releases page).
 - `start.bat` starts the voice service in its own window when Python is found. You can also run it yourself with `python server/kitten.py`.
 - The model is kept in `server/models/` after the first run, so it works offline after that. To add it by hand, download the files from the model's Hugging Face page into `server/models/kitten-tts-nano-0.1/`.
 - A bigger model sounds better but is slower: `KITTEN_MODEL=KittenML/kitten-tts-mini-0.8 python server/kitten.py`.
