@@ -25,6 +25,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOST = os.environ.get('KITTEN_HOST', '127.0.0.1')
 PORT = int(os.environ.get('KITTEN_PORT', '8190'))
 MODEL = os.environ.get('KITTEN_MODEL', 'KittenML/kitten-tts-nano-0.1')
+# Where a downloaded copy of the model is kept, so it runs offline after the first time.
+# Put the model files in this folder by hand, or let the first run download them.
+MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models', MODEL.split('/')[-1])
 VOICES = ['Jasper', 'Bruno', 'Hugo', 'Leo', 'Bella', 'Luna', 'Rosie', 'Kiki']
 DEFAULT_VOICE = 'Jasper'
 MAX_CHARS = 400
@@ -63,14 +66,31 @@ def find_espeak():
     return False
 
 
+def ensure_local_model():
+    """Return the folder to load the model from: a copy in server/models, downloaded once if needed."""
+    if os.path.isdir(MODEL_DIR) and any(os.scandir(MODEL_DIR)):
+        return MODEL_DIR
+    if os.path.isdir(MODEL):
+        return MODEL  # KITTEN_MODEL can also be a folder you point at
+    try:
+        from huggingface_hub import snapshot_download
+        print(f'Downloading {MODEL} once into {MODEL_DIR} ...', flush=True)
+        snapshot_download(repo_id=MODEL, local_dir=MODEL_DIR)
+        return MODEL_DIR
+    except Exception as e:
+        print(f'Could not download {MODEL} ({e}). Trying the default cache instead.', file=sys.stderr, flush=True)
+        return MODEL
+
+
 def load_model():
     global _model
     if _model is None:
         if not find_espeak():
             raise RuntimeError(ESPEAK_HELP)
         from kittentts import KittenTTS
-        print(f'Loading Kitten TTS model {MODEL} ...', flush=True)
-        _model = KittenTTS(MODEL)
+        source = ensure_local_model()
+        print(f'Loading Kitten TTS model from {source} ...', flush=True)
+        _model = KittenTTS(source)
         print('Kitten TTS ready.', flush=True)
     return _model
 

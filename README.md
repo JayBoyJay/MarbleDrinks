@@ -79,6 +79,7 @@ The booth speaks with **Kitten TTS**, a small text-to-speech model that runs on 
 - It needs the local version (`start.bat`). The online version (GitHub Pages) shows the commentary as captions only.
 - One-time setup: install Python, then run `pip install kittentts soundfile numpy`. Kitten TTS also needs **espeak-ng** for pronunciation (install it from the espeak-ng releases page).
 - `start.bat` starts the voice service in its own window when Python is found. You can also run it yourself with `python server/kitten.py`.
+- The model is kept in `server/models/` after the first run, so it works offline after that. To add it by hand, download the files from the model's Hugging Face page into `server/models/kitten-tts-nano-0.1/`.
 - A bigger model sounds better but is slower: `KITTEN_MODEL=KittenML/kitten-tts-mini-0.8 python server/kitten.py`.
 - If the voice service isn't running, the game still works and the booth shows captions.
 
