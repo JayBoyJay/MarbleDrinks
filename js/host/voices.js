@@ -5,11 +5,13 @@
 
 // Kitten TTS preset voices (the names the model ships with).
 export const KITTEN_VOICES = [
-  ['Jasper', 'Jasper (male)'], ['Bruno', 'Bruno (male)'], ['Hugo', 'Hugo (male)'], ['Leo', 'Leo (male)'],
-  ['Bella', 'Bella (female)'], ['Luna', 'Luna (female)'], ['Rosie', 'Rosie (female)'], ['Kiki', 'Kiki (female)'],
+  ['expr-voice-2-m', 'Voice 2 (male)'], ['expr-voice-2-f', 'Voice 2 (female)'],
+  ['expr-voice-3-m', 'Voice 3 (male)'], ['expr-voice-3-f', 'Voice 3 (female)'],
+  ['expr-voice-4-m', 'Voice 4 (male)'], ['expr-voice-4-f', 'Voice 4 (female)'],
+  ['expr-voice-5-m', 'Voice 5 (male)'], ['expr-voice-5-f', 'Voice 5 (female)'],
 ];
 // Ray (play-by-play) and Dusty (colour)
-export const DEFAULT_VOICES = { kitten: ['Jasper', 'Bruno'] };
+export const DEFAULT_VOICES = { kitten: ['expr-voice-2-m', 'expr-voice-3-m'] };
 
 let actx = null;
 function audioCtx() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); return actx; }

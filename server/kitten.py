@@ -33,8 +33,10 @@ HUB_DIR = os.path.join(MODELS_ROOT, 'hub')
 MANUAL_DIR = os.path.join(MODELS_ROOT, MODEL.split('/')[-1])
 REPO_CACHE = os.path.join(HUB_DIR, 'models--' + MODEL.replace('/', '--'))
 os.environ['HF_HUB_CACHE'] = HUB_DIR
-VOICES = ['Jasper', 'Bruno', 'Hugo', 'Leo', 'Bella', 'Luna', 'Rosie', 'Kiki']
-DEFAULT_VOICE = 'Jasper'
+# Voice names are the keys in the model's voices.npz file.
+VOICES = ['expr-voice-2-m', 'expr-voice-2-f', 'expr-voice-3-m', 'expr-voice-3-f',
+          'expr-voice-4-m', 'expr-voice-4-f', 'expr-voice-5-m', 'expr-voice-5-f']
+DEFAULT_VOICE = 'expr-voice-2-m'
 MAX_CHARS = 400
 
 _model = None

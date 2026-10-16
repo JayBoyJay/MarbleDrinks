@@ -815,7 +815,9 @@ function renderVoices() {
   for (const [id, i] of [['voiceSel', 0], ['voiceSel2', 1]]) {
     const sel = $(id); sel.textContent = '';
     for (const [v, label] of KITTEN_VOICES) { const o = document.createElement('option'); o.value = v; o.textContent = label; sel.appendChild(o); }
-    sel.value = state.settings.voices.kitten?.[i] ?? DEFAULT_VOICES.kitten[i];
+    const saved = state.settings.voices.kitten?.[i];
+    sel.value = KITTEN_VOICES.some(([v]) => v === saved) ? saved : DEFAULT_VOICES.kitten[i];
+    state.settings.voices.kitten[i] = sel.value;
   }
   if (net.mode !== 'ws') $('voiceStatus').textContent = 'Voices need the local server (start.bat). This online version shows the booth as captions only.';
 }

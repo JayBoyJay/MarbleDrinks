@@ -131,7 +131,7 @@ async function proxyTts(req, res) {
     const b = await readJson(req);
     const r = await timedFetch(TTS_URL.replace(/\/+$/, '') + '/tts', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: String(b.input || '').slice(0, 400), voice: b.voice || 'Jasper', speed: Number(b.speed) || 1 }),
+      body: JSON.stringify({ text: String(b.input || '').slice(0, 400), voice: b.voice || 'expr-voice-2-m', speed: Number(b.speed) || 1 }),
     }, 15000);
     if (!r.ok) { res.writeHead(502); res.end(`Kitten TTS: ${r.status}`); return; }
     res.writeHead(200, { 'Content-Type': 'audio/wav', 'Cache-Control': 'no-cache' });
