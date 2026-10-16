@@ -25,9 +25,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOST = os.environ.get('KITTEN_HOST', '127.0.0.1')
 PORT = int(os.environ.get('KITTEN_PORT', '8190'))
 MODEL = os.environ.get('KITTEN_MODEL', 'KittenML/kitten-tts-nano-0.1')
-# Where a downloaded copy of the model is kept, so it runs offline after the first time.
-# Put the model files in this folder by hand, or let the first run download them.
-MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models', MODEL.split('/')[-1])
+# The model lives in a Hugging Face style cache inside server/models/hub, so it runs offline
+# after the first time. Files copied by hand into server/models/<model name>/ are moved into
+# that cache automatically on start-up. Set before huggingface_hub is imported.
+MODELS_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
+HUB_DIR = os.path.join(MODELS_ROOT, 'hub')
+MANUAL_DIR = os.path.join(MODELS_ROOT, MODEL.split('/')[-1])
+REPO_CACHE = os.path.join(HUB_DIR, 'models--' + MODEL.replace('/', '--'))
+os.environ['HF_HUB_CACHE'] = HUB_DIR
 VOICES = ['Jasper', 'Bruno', 'Hugo', 'Leo', 'Bella', 'Luna', 'Rosie', 'Kiki']
 DEFAULT_VOICE = 'Jasper'
 MAX_CHARS = 400
@@ -66,20 +71,34 @@ def find_espeak():
     return False
 
 
-def ensure_local_model():
-    """Return the folder to load the model from: a copy in server/models, downloaded once if needed."""
-    if os.path.isdir(MODEL_DIR) and any(os.scandir(MODEL_DIR)):
-        return MODEL_DIR
-    if os.path.isdir(MODEL):
-        return MODEL  # KITTEN_MODEL can also be a folder you point at
+def stage_manual_copy():
+    """Copy hand-downloaded files into the Hugging Face cache layout. Returns True if done."""
+    files = [f for f in os.listdir(MANUAL_DIR) if os.path.isfile(os.path.join(MANUAL_DIR, f))] if os.path.isdir(MANUAL_DIR) else []
+    if not files:
+        return False
+    snap = os.path.join(REPO_CACHE, 'snapshots', 'local')
+    os.makedirs(snap, exist_ok=True)
+    os.makedirs(os.path.join(REPO_CACHE, 'refs'), exist_ok=True)
+    for f in files:
+        shutil.copy2(os.path.join(MANUAL_DIR, f), os.path.join(snap, f))
+    with open(os.path.join(REPO_CACHE, 'refs', 'main'), 'w') as fh:
+        fh.write('local')
+    print(f'Using the model files in {MANUAL_DIR}', flush=True)
+    return True
+
+
+def prepare_model():
+    """Make sure the model is in the local cache. Downloads it once if there's no copy yet."""
+    if stage_manual_copy():
+        os.environ['HF_HUB_OFFLINE'] = '1'
+        return
     try:
         from huggingface_hub import snapshot_download
-        print(f'Downloading {MODEL} once into {MODEL_DIR} ...', flush=True)
-        snapshot_download(repo_id=MODEL, local_dir=MODEL_DIR)
-        return MODEL_DIR
+        print(f'Downloading {MODEL} once into {HUB_DIR} ...', flush=True)
+        snapshot_download(repo_id=MODEL, cache_dir=HUB_DIR)
+        os.environ['HF_HUB_OFFLINE'] = '1'
     except Exception as e:
-        print(f'Could not download {MODEL} ({e}). Trying the default cache instead.', file=sys.stderr, flush=True)
-        return MODEL
+        print(f'Could not download {MODEL}: {e}', file=sys.stderr, flush=True)
 
 
 def load_model():
@@ -88,9 +107,9 @@ def load_model():
         if not find_espeak():
             raise RuntimeError(ESPEAK_HELP)
         from kittentts import KittenTTS
-        source = ensure_local_model()
-        print(f'Loading Kitten TTS model from {source} ...', flush=True)
-        _model = KittenTTS(source)
+        prepare_model()
+        print(f'Loading Kitten TTS model {MODEL} ...', flush=True)
+        _model = KittenTTS(MODEL)
         print('Kitten TTS ready.', flush=True)
     return _model
 
